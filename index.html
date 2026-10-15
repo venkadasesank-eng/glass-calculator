@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="./calc.css">
+    <title>Glass Calculator</title>
+    <style>
+        /* Floating background orbs animation */
+        body::before, body::after {
+            animation: orbFloat 12s ease-in-out infinite alternate;
+        }
+        body::after {
+            animation-duration: 16s;
+            animation-direction: alternate-reverse;
+        }
+        @keyframes orbFloat {
+            0% {
+                transform: translateY(0px) scale(1);
+            }
+            100% {
+                transform: translateY(-25px) scale(1.05);
+            }
+        }
+
+        /* Top controls bar (theme pill + speaker button + history toggle) */
+        .top-controls {
+            position: relative;
+            z-index: 20;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .control-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+            background: var(--pill-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--pill-border);
+            border-radius: 50%;
+            cursor: pointer;
+            color: var(--display-color, #fff);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+            transition: transform 0.2s ease, filter 0.2s ease, background 600ms ease, border-color 600ms ease;
+        }
+
+        .control-btn:hover {
+            transform: scale(1.1);
+            filter: brightness(1.2);
+        }
+
+        .control-btn svg {
+            width: 18px;
+            height: 18px;
+            fill: currentColor;
+            pointer-events: none;
+        }
+
+        /* Slide-out history panel */
+        .history-panel {
+            position: fixed;
+            top: 0;
+            right: -340px;
+            width: 320px;
+            height: 100vh;
+            background: var(--panel-bg);
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
+            border-left: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: -10px 0 40px rgba(0, 0, 0, 0.3);
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            transition: right 0.4s cubic-bezier(0.16, 1, 0.3, 1), background 600ms ease;
+            padding: 24px;
+        }
+
+        .history-panel.open {
+            right: 0;
+        }
+
+        .history-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+            color: var(--display-color, #fff);
+            font-family: sans-serif;
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .history-close {
+            background: none;
+            border: none;
+            color: var(--display-color, #fff);
+            font-size: 20px;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 6px;
+            transition: background 0.2s;
+        }
+
+        .history-close:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .history-list {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding-right: 4px;
+        }
+
+        .history-item {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            padding: 12px 14px;
+            border-radius: 12px;
+            color: var(--display-color, #fff);
+            font-family: sans-serif;
+            cursor: pointer;
+            transition: background 0.2s, transform 0.2s;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+
+        .history-item:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-1px);
+        }
+
+        .history-expr {
+            font-size: 13px;
+            opacity: 0.7;
+            margin-bottom: 4px;
+        }
+
+        .history-res {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .history-empty {
+            color: var(--display-color, #fff);
+            opacity: 0.5;
+            text-align: center;
+            margin-top: 40px;
+            font-family: sans-serif;
+            font-size: 14px;
+        }
+
+        .clear-history-btn {
+            margin-top: 16px;
+            padding: 10px;
+            background: rgba(255, 50, 50, 0.2);
+            border: 1px solid rgba(255, 100, 100, 0.3);
+            color: var(--display-color, #fff);
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+
+        .clear-history-btn:hover {
+            background: rgba(255, 50, 50, 0.35);
+        }
+    </style>
+</head>
+<body>
+    <div class="top-controls">
+        <div class="theme-pill">
+            <div class="theme-swatch swatch-aurora active" data-theme="aurora" title="Aurora Theme"></div>
+            <div class="theme-swatch swatch-midnight" data-theme="midnight" title="Midnight Theme"></div>
+            <div class="theme-swatch swatch-sunset" data-theme="sunset" title="Sunset Theme"></div>
+            <div class="theme-swatch swatch-light-frost" data-theme="light-frost" title="Light Frost Theme"></div>
+        </div>
+        <button id="soundToggle" class="control-btn" role="button" title="Toggle Click Sound">
+            <svg id="speakerIcon" viewBox="0 0 24 24">
+                <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+            </svg>
+        </button>
+        <button id="historyToggle" class="control-btn" role="button" title="Toggle History">
+            <svg viewBox="0 0 24 24">
+                <path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/>
+            </svg>
+        </button>
+    </div>
+
+    <div class="container">
+        <form class="calculator" name="calc">
+            <div class="value-wrapper">
+                <input type="text" readonly class="value" name="txt" id="display"/>
+            </div>
+            <span class="num clear" role="button" data-val="c">c</span>
+            <span class="num" role="button" data-val="/">÷</span>
+            <span class="num" role="button" data-val="*">x</span>
+            <span class="num" role="button" data-val="7">7</span>
+            <span class="num" role="button" data-val="8">8</span>
+            <span class="num" role="button" data-val="9">9</span>
+            <span class="num" role="button" data-val="-">-</span>
+            <span class="num" role="button" data-val="4">4</span>
+            <span class="num" role="button" data-val="5">5</span>
+            <span class="num" role="button" data-val="6">6</span>
+            <span class="num plus" role="button" data-val="+">+</span>
+            <span class="num" role="button" data-val="1">1</span>
+            <span class="num" role="button" data-val="2">2</span>
+            <span class="num" role="button" data-val="3">3</span>
+            <span class="num" role="button" data-val="0">0</span>
+            <span class="num" role="button" data-val="00">00</span>
+            <span class="num" role="button" data-val=".">.</span>
+            <span class="num equal" role="button" data-val="=">=</span>
+        </form>
+    </div>
+
+    <!-- Slide-out History Panel -->
+    <div id="historyPanel" class="history-panel">
+        <div class="history-header">
+            <span>Calculation History</span>
+            <button id="historyClose" class="history-close" role="button">&times;</button>
+        </div>
+        <div id="historyList" class="history-list">
+            <div class="history-empty">No history yet</div>
+        </div>
+        <button id="clearHistory" class="clear-history-btn" role="button">Clear History</button>
+    </div>
+
+    <script type="text/javascript" src="./vanilla-tilt.js"></script>
+    <script type="text/javascript">
+        // Theme switcher logic with localStorage
+        const swatches = document.querySelectorAll('.theme-swatch');
+        
+        function setTheme(themeName) {
+            if (themeName === 'aurora') {
+                document.documentElement.removeAttribute('data-theme');
+            } else {
+                document.documentElement.setAttribute('data-theme', themeName);
+            }
+            localStorage.setItem('glass_calc_theme', themeName);
+
+            swatches.forEach(s => {
+                if (s.getAttribute('data-theme') === themeName) {
+                    s.classList.add('active');
+                } else {
+                    s.classList.remove('active');
+                }
+            });
+        }
+
+        // Load saved theme on startup
+        const savedTheme = localStorage.getItem('glass_calc_theme') || 'aurora';
+        setTheme(savedTheme);
+
+        swatches.forEach(swatch => {
+            swatch.addEventListener('click', () => {
+                const theme = swatch.getAttribute('data-theme');
+                setTheme(theme);
+            });
+        });
+
+        // Web Audio API click sound setup (off by default)
+        let audioCtx = null;
+        let soundEnabled = localStorage.getItem('glass_calc_sound') === 'true';
+
+        const soundToggle = document.getElementById('soundToggle');
+        const speakerIcon = document.getElementById('speakerIcon');
+
+        function updateSpeakerIcon() {
+            if (soundEnabled) {
+                soundToggle.style.opacity = '1';
+                speakerIcon.innerHTML = '<path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>';
+            } else {
+                soundToggle.style.opacity = '0.6';
+                speakerIcon.innerHTML = '<path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C22.63 14.85 23 13.48 23 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>';
+            }
+        }
+        updateSpeakerIcon();
+
+        soundToggle.addEventListener('click', () => {
+            soundEnabled = !soundEnabled;
+            localStorage.setItem('glass_calc_sound', soundEnabled);
+            updateSpeakerIcon();
+            if (soundEnabled) {
+                playSoftClick();
+            }
+        });
+
+        function playSoftClick() {
+            if (!soundEnabled) return;
+            try {
+                if (!audioCtx) {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(600, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(200, audioCtx.currentTime + 0.04);
+                
+                gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.04);
+                
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.04);
+            } catch(e) {
+                // Ignore audio context restrictions
+            }
+        }
+
+        // History Panel Logic
+        const historyToggle = document.getElementById('historyToggle');
+        const historyPanel = document.getElementById('historyPanel');
+        const historyClose = document.getElementById('historyClose');
+        const historyList = document.getElementById('historyList');
+        const clearHistoryBtn = document.getElementById('clearHistory');
+
+        let history = JSON.parse(localStorage.getItem('glass_calc_history') || '[]');
+
+        function renderHistory() {
+            if (history.length === 0) {
+                historyList.innerHTML = '<div class="history-empty">No history yet</div>';
+                return;
+            }
+            historyList.innerHTML = '';
+            history.forEach((item, index) => {
+                const div = document.createElement('div');
+                div.className = 'history-item';
+                div.setAttribute('role', 'button');
+                div.innerHTML = `<div class="history-expr">${item.expression}</div><div class="history-res">= ${item.result}</div>`;
+                div.addEventListener('click', () => {
+                    updateDisplay(item.result);
+                    historyPanel.classList.remove('open');
+                });
+                historyList.appendChild(div);
+            });
+        }
+        renderHistory();
+
+        historyToggle.addEventListener('click', () => {
+            historyPanel.classList.toggle('open');
+            playSoftClick();
+        });
+
+        historyClose.addEventListener('click', () => {
+            historyPanel.classList.remove('open');
+        });
+
+        clearHistoryBtn.addEventListener('click', () => {
+            history = [];
+            localStorage.removeItem('glass_calc_history');
+            renderHistory();
+            playSoftClick();
+        });
+
+        // Custom 3D tilt & moving light following mouse across the panel
+        const container = document.querySelector('.container');
+        
+        container.addEventListener('mousemove', (e) => {
+            const rect = container.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            container.style.setProperty('--mouse-x', `${x}px`);
+            container.style.setProperty('--mouse-y', `${y}px`);
+
+            const centerX = rect.width / 2;
+            const centerY = rect.height / 2;
+            const rotateX = -((y - centerY) / centerY) * 6;
+            const rotateY = ((x - centerX) / centerX) * 6;
+
+            container.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale3d(1.02, 1.02, 1.02)`;
+            container.style.transition = 'none';
+        });
+
+        container.addEventListener('mouseleave', () => {
+            container.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)';
+            container.style.transition = 'transform 0.5s ease-out';
+            container.style.setProperty('--mouse-x', `-1000px`);
+            container.style.setProperty('--mouse-y', `-1000px`);
+        });
+
+        const display = document.getElementById('display');
+        let lastValue = display.value;
+
+        function updateDisplay(newVal) {
+            if (newVal !== lastValue) {
+                lastValue = newVal;
+                display.value = newVal;
+
+                display.classList.remove('slide-up');
+                void display.offsetWidth;
+                display.classList.add('slide-up');
+
+                if (newVal === 'Error') {
+                    display.classList.remove('shake');
+                    void display.offsetWidth;
+                    display.classList.add('shake');
+                }
+            }
+        }
+
+        const buttons = document.querySelectorAll('.calculator span');
+        buttons.forEach((btn, index) => {
+            btn.style.setProperty('--stagger-index', index);
+
+            btn.addEventListener('click', function(e) {
+                playSoftClick();
+                const rect = btn.getBoundingClientRect();
+                const ripple = document.createElement('span');
+                ripple.classList.add('ripple');
+                const size = Math.max(rect.width, rect.height);
+                ripple.style.width = ripple.style.height = `${size}px`;
+                ripple.style.left = `${e.clientX - rect.left - size/2}px`;
+                ripple.style.top = `${e.clientY - rect.top - size/2}px`;
+                btn.appendChild(ripple);
+                setTimeout(() => ripple.remove(), 600);
+
+                const val = btn.getAttribute('data-val');
+                if (val === 'c') {
+                    updateDisplay('');
+                } else if (val === '=') {
+                    try {
+                        const expr = document.calc.txt.value;
+                        let res = eval(expr);
+                        if (res !== undefined && !isNaN(res)) {
+                            updateDisplay(res);
+                            history.unshift({ expression: expr, result: res });
+                            if (history.length > 50) history.pop();
+                            localStorage.setItem('glass_calc_history', JSON.stringify(history));
+                            renderHistory();
+                        } else {
+                            updateDisplay('');
+                        }
+                    } catch(err) {
+                        updateDisplay('Error');
+                    }
+                } else if (val !== null) {
+                    updateDisplay(document.calc.txt.value + val);
+                }
+            });
+        });
+    </script>
+</body>
+</html>
